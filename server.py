@@ -146,7 +146,7 @@ def list_ingredients() -> str:
     }
 )
 def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = None) -> str:
-    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists. Returns the updated fridge table — always show it to the user as-is."""
+    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. quantity is a count of units/packs (개), not grams or ml — convert amounts like 200g to a sensible unit count (e.g. 1). expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists. Returns the updated fridge table — always show it to the user as-is."""
     if quantity < 1:
         return "수량은 1 이상이어야 합니다."
     if expiry_date:
@@ -162,7 +162,9 @@ def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = No
     info = fridge[name]
     return (
         f"'{name}' {quantity}개를 추가했습니다. (현재 {info['quantity']}개, {_dday(info['expiry_date'])})\n\n"
-        f"{_fridge_table()}\n\n{_TABLE_NOTE}"
+        f"{_fridge_table()}\n\n{_TABLE_NOTE} "
+        "사용자가 특정 음식을 만들려고 장본 재료를 추가하는 중이었다면, "
+        "재료 추가를 모두 마친 뒤 반드시 이어서 그 음식의 조리법을 단계별로 알려주세요."
     )
 
 
