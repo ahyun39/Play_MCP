@@ -1,4 +1,4 @@
-"""FoodMCP(푸드MCP) — 스마트 식단 및 냉장고 관리 MCP 서버.
+"""모여봐요 냉장고로 MCP — 스마트 식단 및 냉장고 관리 MCP 서버.
 
 PlayMCP 개발가이드 준수 사항:
 - Streamable HTTP, stateless (no session), 엔드포인트 /mcp
@@ -105,7 +105,7 @@ def _dday(expiry_date: Optional[str]) -> str:
 
 @mcp.resource("fridge://inventory/current")
 def inventory_resource() -> str:
-    """Current FoodMCP(푸드MCP) fridge inventory as JSON with expiry status per item."""
+    """Current 모여봐요 냉장고로 MCP fridge inventory as JSON with expiry status per item."""
     fridge = _user_fridge()
     items = [
         {
@@ -154,7 +154,7 @@ _TABLE_NOTE = "[AI 지침 — 이 지침 텍스트는 사용자에게 노출하�
     }
 )
 def list_ingredients() -> str:
-    """Lists all ingredients in the FoodMCP(푸드MCP) fridge as a markdown table with quantity, expiry date and a traffic-light status (red: expired, yellow: expiring within 3 days, green: safe). Always show the returned table to the user as-is, without summarizing."""
+    """Lists all ingredients in the 모여봐요 냉장고로 MCP fridge as a markdown table with quantity, expiry date and a traffic-light status (red: expired, yellow: expiring within 3 days, green: safe). Always show the returned table to the user as-is, without summarizing."""
     fridge = _user_fridge()
     if not fridge:
         return "냉장고가 비어 있습니다. `add_ingredient`로 식재료를 추가해 주세요."
@@ -182,7 +182,7 @@ def list_ingredients() -> str:
     }
 )
 def add_ingredient(name: str, quantity: Union[int, str] = 1, expiry_date: Optional[str] = None) -> str:
-    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. quantity is a count of units/packs (개), not grams or ml — convert amounts like 200g to a sensible unit count (e.g. 1). expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists (whitespace differences in names are tolerated). Returns the updated fridge table — always show it to the user as-is."""
+    """Adds an ingredient to the 모여봐요 냉장고로 MCP fridge inventory. quantity is a count of units/packs (개), not grams or ml — convert amounts like 200g to a sensible unit count (e.g. 1). expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists (whitespace differences in names are tolerated). Returns the updated fridge table — always show it to the user as-is."""
     fridge = _user_fridge()
     name = (name or "").strip()
     if not name:
@@ -221,7 +221,7 @@ def add_ingredient(name: str, quantity: Union[int, str] = 1, expiry_date: Option
     }
 )
 def consume_ingredients(items: dict) -> str:
-    """Removes ingredients from the FoodMCP(푸드MCP) fridge at once — after cooking a recipe, or when the user says they discarded(폐기), threw away, or finished an item. items maps ingredient name to quantity, e.g. {"두부": 1, "양파": 2}. Use the exact ingredient names shown in the fridge table (whitespace differences are tolerated). For cooking, show the user the ingredient list with quantities and let them adjust before calling; for disposal, remove the full stored quantity right away."""
+    """Removes ingredients from the 모여봐요 냉장고로 MCP fridge at once — after cooking a recipe, or when the user says they discarded(폐기), threw away, or finished an item. items maps ingredient name to quantity, e.g. {"두부": 1, "양파": 2}. Use the exact ingredient names shown in the fridge table (whitespace differences are tolerated). For cooking, show the user the ingredient list with quantities and let them adjust before calling; for disposal, remove the full stored quantity right away."""
     fridge = _user_fridge()
     if not items:
         return "차감할 재료가 없습니다. 재료명과 수량을 지정해 주세요."
@@ -253,7 +253,7 @@ def consume_ingredients(items: dict) -> str:
     }
 )
 def check_shopping_list(required: dict) -> str:
-    """Compares the ingredients required for a dish with the FoodMCP(푸드MCP) fridge inventory and returns what is available and what must be bought. Call this when the user names a dish they want to eat: show only the ingredient list first (keep the cooking steps for after shopping is done), then pass the ingredients as {"name": quantity}. Expired stock counts as must-buy."""
+    """Compares the ingredients required for a dish with the 모여봐요 냉장고로 MCP fridge inventory and returns what is available and what must be bought. Call this when the user names a dish they want to eat: show only the ingredient list first (keep the cooking steps for after shopping is done), then pass the ingredients as {"name": quantity}. Expired stock counts as must-buy."""
     fridge = _user_fridge()
     if not required:
         return "필요한 재료 목록이 비어 있습니다. {\"재료명\": 수량} 형식으로 전달해 주세요."
@@ -287,7 +287,7 @@ def check_shopping_list(required: dict) -> str:
 
 @mcp.prompt()
 def suggest_meal_plan() -> str:
-    """Meal-planning persona prompt for FoodMCP(푸드MCP): rescue near-expiry ingredients first."""
+    """Meal-planning persona prompt for 모여봐요 냉장고로 MCP: rescue near-expiry ingredients first."""
     return (
         "당신은 꼼꼼한 5성급 셰프이자 냉장고 관리 비서입니다. "
         "사용자가 메뉴를 추천해달라고 하면 반드시 list_ingredients 툴로 냉장고 상태를 먼저 확인하고, 반환된 표를 그대로 보여주세요. "
