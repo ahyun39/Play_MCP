@@ -14,6 +14,7 @@
 | `list_ingredients` | 냉장고 목록 조회 — 신호등 표시 (🔴 기한 지남 / 🟡 3일 이내 / 🟢 여유) |
 | `add_ingredient` | 식재료 추가 (유통기한 `YYYY-MM-DD` 선택 입력) |
 | `consume_ingredients` | 레시피 확정 후 사용한 재료들을 수량과 함께 일괄 차감 — 차감 전 AI가 사용자에게 수량 확인 |
+| `check_shopping_list` | 먹고 싶은 음식의 레시피 재료를 냉장고와 대조 — 보유 재료와 사야 할 재료(부족분·기한 지난 재료 포함) 안내 |
 
 ## Resources & Prompts
 
