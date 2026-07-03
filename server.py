@@ -106,7 +106,7 @@ def _fridge_table() -> str:
     expired = [n for n, i in fridge.items() if _status(i["expiry_date"]) == "expired"]
     warning = [n for n, i in fridge.items() if _status(i["expiry_date"]) == "warning"]
     if expired:
-        lines.append(f"\n🔴 유통기한 지남: {', '.join(expired)} — 폐기 후 consume_ingredients로 목록에서 제거하는 것을 권장")
+        lines.append(f"\n🤢 유통기한 지남: {', '.join(expired)} — 폐기 후 consume_ingredients로 목록에서 제거하는 것을 권장")
     if warning:
         lines.append(f"{'' if expired else chr(10)}🚨 유통기한 임박: {', '.join(warning)}")
     return "\n".join(lines)
