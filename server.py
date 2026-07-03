@@ -103,9 +103,12 @@ def _fridge_table() -> str:
         lines.append(
             f"| {_ICON[status]} | {name} | {info['quantity']}개 | {expiry} ({_dday(info['expiry_date'])}) |"
         )
+    expired = [n for n, i in fridge.items() if _status(i["expiry_date"]) == "expired"]
     warning = [n for n, i in fridge.items() if _status(i["expiry_date"]) == "warning"]
+    if expired:
+        lines.append(f"\n🔴 유통기한 지남: {', '.join(expired)} — 폐기 후 consume_ingredients로 목록에서 제거하는 것을 권장")
     if warning:
-        lines.append(f"\n🚨 유통기한 임박: {', '.join(warning)}")
+        lines.append(f"{'' if expired else chr(10)}🚨 유통기한 임박: {', '.join(warning)}")
     return "\n".join(lines)
 
 
@@ -178,7 +181,7 @@ def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = No
     }
 )
 def consume_ingredients(items: dict) -> str:
-    """Consumes multiple ingredients from the FoodMCP(푸드MCP) fridge at once, e.g. after cooking a recipe. items maps ingredient name to quantity used, e.g. {"두부": 1, "양파": 2}. Always show the user the ingredient list with quantities and let them adjust before calling, since they may not have used exactly the recipe amounts."""
+    """Removes ingredients from the FoodMCP(푸드MCP) fridge at once — after cooking a recipe, or when the user says they discarded(폐기), threw away, or finished an item. items maps ingredient name to quantity, e.g. {"두부": 1, "양파": 2}. For cooking, show the user the ingredient list with quantities and let them adjust before calling; for disposal, remove the full stored quantity right away."""
     if not items:
         return "차감할 재료가 없습니다. 재료명과 수량을 지정해 주세요."
     lines = ["## 재료 소진 처리 결과"]
@@ -197,7 +200,7 @@ def consume_ingredients(items: dict) -> str:
             lines.append(f"- ✅ **{name}** {quantity}개 사용 (남은 수량 {fridge[name]['quantity']}개)")
         else:
             del fridge[name]
-            lines.append(f"- ✅ **{name}** 모두 사용, 냉장고에서 제거")
+            lines.append(f"- ✅ **{name}** 전량 소진되어 냉장고에서 제거")
     return "\n".join(lines)
 
 
