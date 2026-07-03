@@ -78,19 +78,8 @@ def inventory_resource() -> str:
     return json.dumps({"items": items}, ensure_ascii=False)
 
 
-@mcp.tool(
-    annotations={
-        "title": "List fridge ingredients",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": False,
-    }
-)
-def list_ingredients() -> str:
-    """Lists all ingredients in the FoodMCP(푸드MCP) fridge as a markdown table with quantity, expiry date and a traffic-light status (red: expired, yellow: expiring within 3 days, green: safe). Always show the returned table to the user as-is, without summarizing."""
-    if not fridge:
-        return "냉장고가 비어 있습니다. `add_ingredient`로 식재료를 추가해 주세요."
+def _fridge_table() -> str:
+    """현재 냉장고 상태를 마크다운 표로 렌더링."""
     lines = [
         "## 냉장고 현황",
         "| 상태 | 식재료 | 수량 | 유통기한 |",
@@ -105,14 +94,34 @@ def list_ingredients() -> str:
     warning = [n for n, i in fridge.items() if _status(i["expiry_date"]) == "warning"]
     if warning:
         lines.append(f"\n🚨 유통기한 임박: {', '.join(warning)}")
-    lines.append(
-        "\n[AI 지침] 위 표는 요약하지 말고 그대로 보여주세요. "
-        "사용자가 음식/메뉴 추천을 원하면 다음 순서를 따르세요: "
+    return "\n".join(lines)
+
+
+_TABLE_NOTE = "[AI 지침] 위 표는 요약하지 말고 그대로 보여주세요."
+
+
+@mcp.tool(
+    annotations={
+        "title": "List fridge ingredients",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
+def list_ingredients() -> str:
+    """Lists all ingredients in the FoodMCP(푸드MCP) fridge as a markdown table with quantity, expiry date and a traffic-light status (red: expired, yellow: expiring within 3 days, green: safe). Always show the returned table to the user as-is, without summarizing."""
+    if not fridge:
+        return "냉장고가 비어 있습니다. `add_ingredient`로 식재료를 추가해 주세요."
+    return (
+        f"{_fridge_table()}\n\n"
+        f"{_TABLE_NOTE} 사용자가 냉장고 조회만 요청했다면 표만 보여주고 끝내세요 — "
+        "사용자가 먼저 요청하지 않는 한 음식이나 레시피를 제안하지 마세요. "
+        "사용자가 음식 추천이나 레시피를 명시적으로 원한 경우에만 다음 순서를 따르세요: "
         "① 위 재료(임박 재료 우선)로 만들 수 있는 음식 리스트를 제시하고 \"어떤 음식의 레시피가 궁금하신가요?\"라고 물어보세요. "
         "② 사용자가 음식을 고르면 레시피(필요한 재료와 수량, 조리법)를 보여주고 \"이 음식으로 드실 예정이신가요? (예/아니오)\"라고 물어보세요. "
         "③ '예'라면 consume_ingredients 툴로 레시피에 쓰인 재료를 냉장고에서 차감하고, '아니오'라면 다른 음식을 제안하세요."
     )
-    return "\n".join(lines)
 
 
 @mcp.tool(
@@ -125,7 +134,7 @@ def list_ingredients() -> str:
     }
 )
 def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = None) -> str:
-    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. expiry_date is optional, format YYYY-MM-DD. Increments quantity if the ingredient already exists."""
+    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. expiry_date is optional, format YYYY-MM-DD. Increments quantity if the ingredient already exists. Returns the updated fridge table — always show it to the user as-is."""
     if quantity < 1:
         return "수량은 1 이상이어야 합니다."
     if expiry_date:
@@ -140,7 +149,10 @@ def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = No
     else:
         fridge[name] = {"quantity": quantity, "expiry_date": expiry_date}
     info = fridge[name]
-    return f"'{name}' {quantity}개를 추가했습니다. (현재 {info['quantity']}개, {_dday(info['expiry_date'])})"
+    return (
+        f"'{name}' {quantity}개를 추가했습니다. (현재 {info['quantity']}개, {_dday(info['expiry_date'])})\n\n"
+        f"{_fridge_table()}\n\n{_TABLE_NOTE}"
+    )
 
 
 @mcp.tool(
@@ -186,7 +198,7 @@ def consume_ingredients(items: dict) -> str:
     }
 )
 def check_shopping_list(required: dict) -> str:
-    """Compares the ingredients required for a dish with the FoodMCP(푸드MCP) fridge inventory and returns what is available and what must be bought. Call this when the user names a dish they want to eat: first present the recipe, then pass its ingredients as {"name": quantity}. Expired stock counts as must-buy."""
+    """Compares the ingredients required for a dish with the FoodMCP(푸드MCP) fridge inventory and returns what is available and what must be bought. Call this when the user names a dish they want to eat: show only the ingredient list first (keep the cooking steps for after shopping is done), then pass the ingredients as {"name": quantity}. Expired stock counts as must-buy."""
     if not required:
         return "필요한 재료 목록이 비어 있습니다. {\"재료명\": 수량} 형식으로 전달해 주세요."
     have, buy = [], []
@@ -206,9 +218,15 @@ def check_shopping_list(required: dict) -> str:
             have.append(f"| ✅ {name} | {info['quantity']}개 | - | {quantity}개 |")
     lines = ["## 장보기 체크 결과", "| 재료 | 냉장고 | 구매 | 전체 필요 |", "|---|---|---|---|"] + have + buy
     if buy:
-        lines.append("\n🛒 위 구매 목록을 사용자에게 안내하고, 장을 본 뒤 add_ingredient로 냉장고에 추가하도록 권해 주세요.")
+        lines.append(
+            "\n[AI 지침] 위 표는 그대로 보여주세요. 아직 조리법(만드는 순서)은 보여주지 마세요. "
+            "구매할 재료를 안내하고 \"장을 보신 후 말씀해 주시면 add_ingredient로 냉장고에 추가하고 레시피를 알려드릴게요!\"라고 마무리하세요. "
+            "사용자가 장을 다 봤다고 하면 구매한 재료를 add_ingredient로 냉장고에 추가한 뒤, 그때 조리법을 단계별로 보여주세요."
+        )
     else:
-        lines.append("\n✅ 모든 재료가 냉장고에 있습니다! 바로 요리를 시작할 수 있다고 안내해 주세요.")
+        lines.append(
+            "\n[AI 지침] 위 표는 그대로 보여주세요. 모든 재료가 냉장고에 있으니 이제 조리법을 단계별로 보여주세요."
+        )
     return "\n".join(lines)
 
 
@@ -224,8 +242,9 @@ def suggest_meal_plan() -> str:
         "\"이 음식으로 드실 예정이신가요? (예/아니오)\"라고 물어보세요. "
         "'예'라면 consume_ingredients 툴로 레시피에 쓰인 재료를 냉장고에서 차감하고, '아니오'라면 다른 음식을 제안하세요. "
         "임박 재료가 있으면 '유통기한이 임박한 [재료명]을(를) 구출하기 위한 레시피입니다!'라는 멘트를 덧붙이세요. "
-        "반대로 사용자가 먹고 싶은 음식을 먼저 말하면, 레시피(필요한 재료와 수량 포함)를 보여준 뒤 "
-        "check_shopping_list 툴에 레시피 재료를 전달해 냉장고에 있는 재료와 사야 할 재료를 알려주세요."
+        "반대로 사용자가 먹고 싶은 음식을 먼저 말하면 두 단계로 진행하세요. "
+        "1단계: 필요한 재료와 수량만 보여주고(조리법은 아직 보여주지 않음) check_shopping_list 툴로 사야 할 재료를 안내하세요. "
+        "2단계: 사야 할 재료가 없거나 사용자가 장을 다 봤다고 하면(구매 재료는 add_ingredient로 추가) 그때 조리법을 단계별로 보여주세요."
     )
 
 
