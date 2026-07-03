@@ -10,6 +10,7 @@ PlayMCP 개발가이드 준수 사항:
 
 import json
 import os
+import re
 from datetime import date, timedelta
 from typing import Optional
 
@@ -54,6 +55,17 @@ def _status(expiry_date: Optional[str]) -> str:
     if days_left <= 3:
         return "warning"
     return "safe"
+
+
+def _parse_expiry(expiry_date: str) -> Optional[str]:
+    """YYYYMMDD 또는 YYYY-MM-DD 입력을 YYYY-MM-DD로 정규화. 잘못된 형식/날짜면 None."""
+    s = expiry_date.strip()
+    if re.fullmatch(r"\d{8}", s):
+        s = f"{s[:4]}-{s[4:6]}-{s[6:]}"
+    try:
+        return date.fromisoformat(s).isoformat()
+    except ValueError:
+        return None
 
 
 def _dday(expiry_date: Optional[str]) -> str:
@@ -134,14 +146,13 @@ def list_ingredients() -> str:
     }
 )
 def add_ingredient(name: str, quantity: int = 1, expiry_date: Optional[str] = None) -> str:
-    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. expiry_date is optional, format YYYY-MM-DD. Increments quantity if the ingredient already exists. Returns the updated fridge table — always show it to the user as-is."""
+    """Adds an ingredient to the FoodMCP(푸드MCP) fridge inventory. expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists. Returns the updated fridge table — always show it to the user as-is."""
     if quantity < 1:
         return "수량은 1 이상이어야 합니다."
     if expiry_date:
-        try:
-            date.fromisoformat(expiry_date)
-        except ValueError:
-            return "유통기한은 YYYY-MM-DD 형식으로 입력해 주세요."
+        expiry_date = _parse_expiry(expiry_date)
+        if expiry_date is None:
+            return "유통기한은 YYYY-MM-DD 또는 YYYYMMDD 형식으로 입력해 주세요."
     if name in fridge:
         fridge[name]["quantity"] += quantity
         if expiry_date:
