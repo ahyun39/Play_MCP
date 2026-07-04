@@ -89,11 +89,16 @@ def _find_key(fridge: dict, name: str) -> Optional[str]:
 
 
 def _parse_quantity(quantity: Union[int, str, None]) -> Optional[int]:
-    """수량 값에서 정수를 관대하게 추출. ('2개', '200g' → 2, 200) 숫자가 없으면 None."""
+    """수량 값에서 개수를 관대하게 추출. '2', '2개' → 2. '200g', '1L', '1큰술' 같은
+    무게/부피/계량 표현은 1묶음으로 취급. 숫자가 없으면 None."""
     if isinstance(quantity, int):
         return quantity
-    m = re.search(r"\d+", str(quantity))
-    return int(m.group()) if m else None
+    s = str(quantity).strip()
+    m = re.fullmatch(r"(\d+)\s*(개|팩|모|장|봉|캔|묶음)?", s)
+    if m:
+        return int(m.group(1))
+    # ponytail: 단위 인식 대신 '숫자+기타단위 = 1묶음' 휴리스틱 — 김치 200g이 200개가 되는 것 방지
+    return 1 if re.search(r"\d", s) else None
 
 
 def _dday(expiry_date: Optional[str]) -> str:
@@ -143,6 +148,11 @@ def _fridge_table(fridge: dict) -> str:
 
 _TABLE_NOTE = "[AI 지침 — 이 지침 텍스트는 사용자에게 노출하지 마세요] 위 표는 요약하지 말고 그대로 보여주세요."
 
+_YESNO = (
+    "예/아니오 답변을 판단할 때 '응', '어', '네', '그래', '좋아' 등 모든 긍정 표현은 '예'로, "
+    "'아니', '아니야', '싫어', '괜찮아' 등 모든 부정 표현은 '아니오'로 해석하세요. 절대 답변을 거부하지 마세요."
+)
+
 _RECIPE_CARD = (
     "레시피를 보여줄 때는 반드시 아래 카드 형식을 그대로 사용하세요:\n"
     "---\n"
@@ -170,7 +180,7 @@ def list_ingredients() -> str:
     """Lists all ingredients in the MoyeoFridge(모여봐요 냉장고로) as a markdown table with quantity, expiry date and a traffic-light status (red: expired, yellow: expiring within 3 days, green: safe). Always show the returned table to the user as-is, without summarizing."""
     fridge = _user_fridge()
     if not fridge:
-        return "냉장고가 비어 있습니다. `add_ingredient`로 식재료를 추가해 주세요."
+        return "냉장고가 비어 있습니다. `add_ingredients`로 식재료를 추가해 주세요."
     return (
         f"{_fridge_table(fridge)}\n\n"
         f"{_TABLE_NOTE} 두 경우를 구분해 행동하세요.\n"
@@ -182,48 +192,59 @@ def list_ingredients() -> str:
         "목록 끝에 \"어떤 음식의 레시피가 궁금하신가요?\"라고 물어보세요. "
         "② 사용자가 음식을 고르면 레시피를 보여주고 \"이 음식으로 드실 예정이신가요? (예/아니오)\"라고 물어보세요. "
         "③ '예'라면 consume_ingredients 툴로 레시피에 쓰인 재료를 냉장고에서 차감하고, '아니오'라면 다른 음식 3가지를 새로 제안하세요. "
-        f"{_RECIPE_CARD}"
+        f"{_YESNO} {_RECIPE_CARD}"
     )
 
 
 @mcp.tool(
     annotations={
-        "title": "Add an ingredient",
+        "title": "Add ingredients",
         "readOnlyHint": False,
         "destructiveHint": False,
         "idempotentHint": False,
         "openWorldHint": False,
     }
 )
-def add_ingredient(name: str, quantity: Union[int, str] = 1, expiry_date: Optional[str] = None) -> str:
-    """Adds an ingredient to the MoyeoFridge(모여봐요 냉장고로) fridge inventory. quantity is a count of units/packs (개), not grams or ml — convert amounts like 200g to a sensible unit count (e.g. 1). expiry_date is optional, format YYYY-MM-DD or YYYYMMDD. Increments quantity if the ingredient already exists (whitespace differences in names are tolerated). Returns the updated fridge table — always show it to the user as-is."""
+def add_ingredients(items: dict) -> str:
+    """Adds one or more ingredients to the MoyeoFridge(모여봐요 냉장고로) fridge in a single call — when the user bought several items, always add them all in ONE call, never one by one. items maps ingredient name to a quantity (e.g. {"두부": 2}) or to an object with quantity and expiry_date (e.g. {"우유": {"quantity": 1, "expiry_date": "2026-07-10"}}). Quantity is a count of units/packs (개), not grams or ml — amounts like 200g count as 1 pack. expiry_date format: YYYY-MM-DD or YYYYMMDD. Returns the updated fridge table — always show it to the user as-is."""
     fridge = _user_fridge()
-    name = (name or "").strip()
-    if not name:
-        return "재료명을 입력해 주세요."
-    quantity = _parse_quantity(quantity)
-    if quantity is None or quantity < 1:
-        return "수량은 1 이상의 숫자여야 합니다."
-    if expiry_date:
-        expiry_date = _parse_expiry(expiry_date)
-        if expiry_date is None:
-            return "유통기한은 YYYY-MM-DD 또는 YYYYMMDD 형식으로 입력해 주세요."
-    key = _find_key(fridge, name)
-    if key:
-        fridge[key]["quantity"] += quantity
+    if not items:
+        return "추가할 재료가 없습니다. {\"재료명\": 수량} 형식으로 전달해 주세요."
+    results = ["## 재료 추가 결과"]
+    for name, value in items.items():
+        name = (name or "").strip()
+        if not name:
+            continue
+        expiry_date = None
+        quantity = value
+        if isinstance(value, dict):
+            quantity = value.get("quantity", 1)
+            expiry_date = value.get("expiry_date")
+        quantity = _parse_quantity(quantity)
+        if quantity is None or quantity < 1:
+            results.append(f"- ⚠️ **{name}**: 수량이 올바르지 않아 건너뜀")
+            continue
         if expiry_date:
-            fridge[key]["expiry_date"] = expiry_date
-    else:
-        key = name
-        fridge[key] = {"quantity": quantity, "expiry_date": expiry_date}
-    info = fridge[key]
+            expiry_date = _parse_expiry(expiry_date)
+            if expiry_date is None:
+                results.append(f"- ⚠️ **{name}**: 유통기한 형식 오류(YYYY-MM-DD)로 건너뜀")
+                continue
+        key = _find_key(fridge, name)
+        if key:
+            fridge[key]["quantity"] += quantity
+            if expiry_date:
+                fridge[key]["expiry_date"] = expiry_date
+        else:
+            key = name
+            fridge[key] = {"quantity": quantity, "expiry_date": expiry_date}
+        results.append(f"- ✅ **{key}** {quantity}개 추가 (현재 {fridge[key]['quantity']}개, {_dday(fridge[key]['expiry_date'])})")
     return (
-        f"'{name}' {quantity}개를 추가했습니다. (현재 {info['quantity']}개, {_dday(info['expiry_date'])})\n\n"
-        f"{_fridge_table(fridge)}\n\n{_TABLE_NOTE} "
+        "\n".join(results) + f"\n\n{_fridge_table(fridge)}\n\n{_TABLE_NOTE} "
         "사용자가 특정 음식을 만들려고 장본 재료를 추가하는 중이었다면, "
         "재료 추가를 모두 마친 뒤 바로 조리법을 보여주지 말고 \"[음식명] 레시피를 알려드릴까요? (예/아니오)\"라고 물어보세요. "
         "'예'면 레시피를 카드 형식(🍳 요리명, ⏱️ 시간·인분·난이도, 재료 표, 만드는 법)으로 보여주고, "
-        "'아니오'면 냉장고 재료로 만들 수 있는 다른 음식 3가지를 번호 목록으로 제안하고 추천 외에 먹고 싶은 음식이 있는지 물어보세요."
+        "'아니오'면 냉장고 재료로 만들 수 있는 다른 음식 3가지를 번호 목록으로 제안하고 추천 외에 먹고 싶은 음식이 있는지 물어보세요. "
+        f"{_YESNO}"
     )
 
 
@@ -294,12 +315,13 @@ def check_shopping_list(required: dict) -> str:
             "구매할 재료를 안내하고 \"장을 보신 후 말씀해 주시면 재료를 냉장고에 추가해 드릴게요!\"라고 마무리하세요. "
             "사용자가 장을 다 봤다고 하면 다음 순서를 따르세요: "
             "① 먼저 \"안내드린 재료를 그대로 사오셨나요? 다르게 사셨거나 추가로 사신 게 있다면 알려주세요!\"라고 물어보세요. "
-            "그대로 샀다면 안내한 구매 목록을, 다르다면 사용자가 말한 실제 구매 품목을 add_ingredient로 냉장고에 추가하세요. "
+            "그대로 샀다면 안내한 구매 목록 전체를, 다르다면 사용자가 말한 실제 구매 품목 전체를 "
+            "add_ingredients 툴 **한 번의 호출**에 모두 담아 냉장고에 추가하세요. 품목을 하나라도 누락하면 안 됩니다. "
             "② 추가를 마치면 바로 조리법을 보여주지 말고 \"[음식명] 레시피를 알려드릴까요? (예/아니오)\"라고 물어보세요. "
             "'예'라면 조리법을 카드 형식으로 보여주세요. "
             "'아니오'라면 냉장고 재료로 만들 수 있는 다른 음식 3가지를 번호 목록으로 제안하고 "
             "\"추천 음식 외에 따로 먹고 싶은 음식이 있으신가요?\"라고 물어보세요. "
-            f"{_RECIPE_CARD}"
+            f"{_YESNO} {_RECIPE_CARD}"
         )
     else:
         lines.append(
@@ -324,9 +346,10 @@ def suggest_meal_plan() -> str:
         "임박 재료가 있으면 '유통기한이 임박한 [재료명]을(를) 구출하기 위한 레시피입니다!'라는 멘트를 덧붙이세요. "
         "반대로 사용자가 먹고 싶은 음식을 먼저 말하면 두 단계로 진행하세요. "
         "1단계: 필요한 재료와 수량만 보여주고(조리법은 아직 보여주지 않음) check_shopping_list 툴로 사야 할 재료를 안내하세요. "
-        "2단계: 사용자가 장을 다 봤다고 하면 안내한 재료를 그대로 샀는지 물어보고, 다르게 샀다면 실제 구매 품목을 확인해 add_ingredient로 추가하세요. "
+        "2단계: 사용자가 장을 다 봤다고 하면 안내한 재료를 그대로 샀는지 물어보고, 구매 품목 전체를 add_ingredients 한 번의 호출로 추가하세요. "
         "추가 후에는 \"[음식명] 레시피를 알려드릴까요? (예/아니오)\"라고 묻고, '예'면 조리법을 카드 형식으로 보여주고, "
-        "'아니오'면 냉장고 재료로 만들 수 있는 다른 음식 3가지를 제안하며 추천 외에 먹고 싶은 음식이 있는지 물어보세요."
+        "'아니오'면 냉장고 재료로 만들 수 있는 다른 음식 3가지를 제안하며 추천 외에 먹고 싶은 음식이 있는지 물어보세요. "
+        f"{_YESNO}"
     )
 
 
