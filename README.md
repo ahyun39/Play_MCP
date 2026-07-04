@@ -119,13 +119,3 @@ npx @modelcontextprotocol/inspector
 docker build -t foodmcp .
 docker run -p 8000:8000 foodmcp
 ```
-
-## PlayMCP 제출 절차
-
-1. 이 저장소를 GitHub에 push (public 권장, private이면 PAT 필요)
-2. [PlayMCP in KC](https://playmcp.kakaocloud.io) → 새 MCP 서버 등록 → **Git 소스 빌드** → Git URL 입력 (Dockerfile 경로: `Dockerfile`, 브랜치: `main`)
-3. Status **Active** 확인 후 Endpoint URL 복사
-4. [PlayMCP](https://playmcp.kakao.com) 개발자 콘솔 → 새로운 MCP 서버 등록 → Endpoint 입력 → 정보 불러오기 → **임시 등록** (인증 방식: 인증 사용하지 않음)
-5. MCP 상세 미리보기 → 도구함에 추가 → AI 채팅으로 충분히 테스트
-6. **심사 요청** → 승인 후 공개 상태를 **전체 공개**로 전환
-7. 공모전 페이지에서 MCP 상세페이지 URL로 예선 접수 (마감: 2026-07-14)
